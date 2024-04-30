@@ -1,7 +1,8 @@
-import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 enum PermissionType {
   notification,
@@ -28,8 +29,6 @@ enum PlatformType {
   webApp,
 }
 
-final _permissionService = PermissionService();
-
 class AppWebView extends StatelessWidget {
   const AppWebView({
     Key? key,
@@ -43,6 +42,10 @@ class AppWebView extends StatelessWidget {
     return Scaffold(
       body: AppWebViewPage(
         initialUrl: url,
+      ),
+      floatingActionButton: FloatingActionButton(
+        child: const Icon(Icons.open_in_browser),
+        onPressed: () => launchUrlString(url),
       ),
     );
   }
@@ -72,69 +75,19 @@ class AppWebViewPage extends StatelessWidget {
             )
           : null,
       initialSettings: InAppWebViewSettings(
-        useShouldOverrideUrlLoading: true,
+        isInspectable: kDebugMode,
+        mediaPlaybackRequiresUserGesture: false,
+        javaScriptEnabled: true,
+        iframeAllow: "camera; microphone",
       ),
       onPermissionRequest: (controller, PermissionRequest request) async {
-        final permissionStatuses = <PermissionStatus>[];
-
-        for (final permission in request.resources) {
-          if (permission == PermissionResourceType.MICROPHONE) {
-            await _permissionService.checkAndRequestPermissions(
-              permissionTypes: [PermissionType.microphone],
-              onGranted: () => permissionStatuses.add(PermissionStatus.granted),
-            );
-          }
-        }
+        await Permission.microphone.request();
 
         return PermissionResponse(
           resources: request.resources,
-          action: permissionStatuses.every((status) => status.isGranted)
-              ? PermissionResponseAction.GRANT
-              : PermissionResponseAction.DENY,
+          action: PermissionResponseAction.GRANT,
         );
       },
     );
-  }
-}
-
-class PermissionService {
-  Future<bool> checkAndRequestPermissions({
-    required List<PermissionType> permissionTypes,
-    Function? onGranted,
-    Function? onDenied,
-  }) async {
-    final permissionList = [Permission.microphone];
-
-    /// Request for permission if needed
-    /// Note if permission is already granted, it won't display system popup
-    final permissionsResultMap = await permissionList.request();
-
-    /// Execute scenario functions of permission status result
-    return _executeOnResult(
-      permissionsResultMap.values,
-      onGranted: onGranted,
-      onDenied: onDenied,
-    );
-  }
-
-  Future<bool> _executeOnResult(
-    Iterable<PermissionStatus> results, {
-    Function? onGranted,
-    Function? onDenied,
-  }) async {
-    final permissionNotGranted = results.firstWhereOrNull(
-      (result) => result != PermissionStatus.granted,
-    );
-    final allPermissionsGranted = permissionNotGranted == null;
-
-    if (allPermissionsGranted) {
-      /// On granted we execute associated function if any
-      onGranted?.call();
-    } else {
-      // If we specified a specific deny method, we call it
-      onDenied?.call();
-    }
-
-    return allPermissionsGranted;
   }
 }
